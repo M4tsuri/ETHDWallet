@@ -21,3 +21,7 @@ features = ["stm32f407", "rt"]
 
 [build-dependencies]
 dotenv = "0.15.0"
+
+[dependencies.stm32f4xx-hal]
+version = "0.13.1"
+features = ["stm32f407"] # replace the model of your microcontroller here
