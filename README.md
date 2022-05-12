@@ -13,5 +13,5 @@
 
 ## 技术路线
 
-- 使用![k256](https://docs.rs/k256/latest/k256/)以及![sha3](https://docs.rs/sha3/latest/sha3/)生成钱包（公私钥对）
-- 尝试修改![rust-otp](https://github.com/TimDumol/rust-otp)库进行OTP的生成
+- 使用[k256](https://docs.rs/k256/latest/k256/)以及[sha3](https://docs.rs/sha3/latest/sha3/)生成钱包（公私钥对）
+- 尝试修改[rust-otp](https://github.com/TimDumol/rust-otp)库进行OTP的生成
