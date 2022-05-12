@@ -10,7 +10,7 @@ use error::{Result, Error};
 use panic_halt as _; // panic handler
 
 use cortex_m_rt::entry;
-use cortex_m::interrupt::{free, Mutex};
+use cortex_m::interrupt::{free, Mutex, CriticalSection};
 use stm32f4::stm32f407::{
     GPIOH, GPIOD, GPIOA, GPIOB,
     self
@@ -20,14 +20,15 @@ use stm32f4xx_hal::{
     i2c::{I2c1, self},
     rcc::{RccExt, Enable},
     prelude::*, 
-    gpio::{Edge, Output, Input}
+    gpio::{Edge, Output}
 };
 
 mod error;
 
 static LED: Mutex<Cell<Option<stm32f4xx_hal::gpio::Pin<'F', 10, Output>>>> = Mutex::new(Cell::new(None));
-static KEY_TRIGGER: Mutex<Cell<Option<stm32f4xx_hal::gpio::Pin<'D', 13, Input>>>> = Mutex::new(Cell::new(None));
 static LED_STATE: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
+static EXTI: Mutex<Cell<Option<stm32f407::EXTI>>> = Mutex::new(Cell::new(None));
+
 
 fn gpio_init(dp: &stm32f407::Peripherals) {
     GPIOH::enable(&dp.RCC);
@@ -78,13 +79,13 @@ fn main_loop() -> Result<()> {
     let mut syscfg = dp.SYSCFG.constrain();
 
     let gpiod = dp.GPIOD.split();
-    let mut kb_trigger = gpiod.pd13.into_pull_down_input();
-    kb_trigger.make_interrupt_source(&mut syscfg);
-    kb_trigger.enable_interrupt(&mut dp.EXTI);
-    kb_trigger.trigger_on_edge(&mut dp.EXTI, Edge::Falling);
+    let mut key_trigger = gpiod.pd13.into_pull_down_input();
+    key_trigger.make_interrupt_source(&mut syscfg);
+    key_trigger.enable_interrupt(&mut dp.EXTI);
+    key_trigger.trigger_on_edge(&mut dp.EXTI, Edge::Falling);
 
     free(|cs| {
-        KEY_TRIGGER.borrow(cs).replace(Some(kb_trigger));
+        EXTI.borrow(cs).replace(Some(dp.EXTI));
     });
     
 
@@ -94,10 +95,6 @@ fn main_loop() -> Result<()> {
     }
 
     Ok(())
-
-    // // Set up the system clock. We want to run at 48MHz for this one.
-    // let rcc = dp.RCC.constrain();
-    // let clocks = rcc.cfgr.sysclk(48.MHz()).freeze();
 
     // // Create a delay abstraction based on SysTick
     // let mut delay = cp.SYST.delay(&clocks);
@@ -112,23 +109,35 @@ fn main() -> ! {
     loop { }
 }
 
+fn set_led(cs: &CriticalSection) {
+    let state = LED_STATE.borrow(cs).get();
+    let mut led = LED.borrow(cs).replace(None).unwrap();
+
+    if state {
+        led.set_high()
+    } else {
+        led.set_low()
+    };
+
+    LED.borrow(cs).replace(Some(led));
+    LED_STATE.borrow(cs).replace(state ^ true);
+}
+
 #[allow(non_snake_case)]
 #[interrupt]
 fn EXTI15_10() {
     free(|cs| {
-        let state = LED_STATE.borrow(cs).get();
-        let mut led = LED.borrow(cs).replace(None).unwrap();
-        let mut key_trigger = KEY_TRIGGER.borrow(cs).replace(None).unwrap();
-        key_trigger.clear_interrupt_pending_bit();
+        let exti = EXTI.borrow(cs).replace(None).unwrap();
+        
+        let pr = exti.pr.read();
+        if pr.pr13().bit_is_set() {
+            // when an interrupt is triggered, the pending bit corresponding to 
+            // the interrupt line is set. This request can be reset by writing 
+            // a 1 in the pending register
+            exti.pr.write(|w| w.pr13().set_bit());
+            set_led(cs);
+        }
 
-        if state { 
-            led.set_high()
-        } else {
-            led.set_low()
-        };
-
-        KEY_TRIGGER.borrow(cs).replace(Some(key_trigger));
-        LED.borrow(cs).replace(Some(led));
-        LED_STATE.borrow(cs).replace(state ^ true);
+        EXTI.borrow(cs).replace(Some(exti));
     })
 }
