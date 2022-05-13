@@ -1,10 +1,12 @@
 #![feature(let_else)]
 #![allow(clippy::empty_loop)]
 #![no_main]
-#![no_std]
+#![cfg_attr(not(test), no_std)]
+#![feature(alloc_error_handler)]
 
-use core::cell::Cell;
+use core::{cell::Cell, alloc::Layout};
 
+use alloc_cortex_m::CortexMHeap;
 use error::{Result, Error};
 // Halt on panic
 use panic_halt as _; // panic handler
@@ -18,17 +20,27 @@ use stm32f4::stm32f407::{
 use stm32f4xx_hal::{
     interrupt, pac,
     i2c::{I2c1, self},
-    rcc::{RccExt, Enable},
+    rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
     gpio::{Edge, Output}
 };
 
+extern crate alloc;
+
 mod error;
+mod task;
+
+#[global_allocator]
+static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
 
 static LED: Mutex<Cell<Option<stm32f4xx_hal::gpio::Pin<'F', 10, Output>>>> = Mutex::new(Cell::new(None));
 static LED_STATE: Mutex<Cell<bool>> = Mutex::new(Cell::new(true));
 static EXTI: Mutex<Cell<Option<stm32f407::EXTI>>> = Mutex::new(Cell::new(None));
 
+#[alloc_error_handler]
+fn oom(_: Layout) -> ! {
+    loop { }
+}
 
 fn gpio_init(dp: &stm32f407::Peripherals) {
     GPIOH::enable(&dp.RCC);
@@ -37,7 +49,17 @@ fn gpio_init(dp: &stm32f407::Peripherals) {
     GPIOB::enable(&dp.RCC);
 }
 
-fn main_loop() -> Result<()> {
+fn clock_init(rcc: Rcc) -> Clocks {
+    rcc.cfgr
+        .use_hse(25.MHz())
+        .sysclk(168.MHz())
+        .hclk(168.MHz())
+        .pclk1(42.MHz())
+        .pclk2(84.MHz())
+        .freeze()
+}
+
+fn init() -> Result<()> {
     let (Some(mut dp), Some(_cp)) = (
         stm32f407::Peripherals::take(),
         cortex_m::peripheral::Peripherals::take(),
@@ -46,21 +68,8 @@ fn main_loop() -> Result<()> {
     };
 
     gpio_init(&dp);
-
-    let gpiof = dp.GPIOF.split();
-
-    free(|cs| {
-        LED.borrow(cs).replace(Some(gpiof.pf10.into_push_pull_output()));
-    });
-
-    let rcc = dp.RCC.constrain();
-    let clocks = rcc.cfgr
-        .use_hse(25.MHz())
-        .sysclk(168.MHz())
-        .hclk(168.MHz())
-        .pclk1(42.MHz())
-        .pclk2(84.MHz())
-        .freeze();
+    let clocks = clock_init(dp.RCC.constrain());
+    
 
     let i2c_parts = dp.GPIOB.split();
     let i2c_pins = (i2c_parts.pb6, i2c_parts.pb7);
@@ -77,18 +86,29 @@ fn main_loop() -> Result<()> {
     );
 
     let mut syscfg = dp.SYSCFG.constrain();
-
+    // initialize triggering keyboard interrupt
     let gpiod = dp.GPIOD.split();
     let mut key_trigger = gpiod.pd13.into_pull_down_input();
     key_trigger.make_interrupt_source(&mut syscfg);
     key_trigger.enable_interrupt(&mut dp.EXTI);
     key_trigger.trigger_on_edge(&mut dp.EXTI, Edge::Falling);
 
+    let gpiof = dp.GPIOF.split();
+
     free(|cs| {
+        LED.borrow(cs).replace(Some(gpiof.pf10.into_push_pull_output()));
         EXTI.borrow(cs).replace(Some(dp.EXTI));
     });
-    
 
+    // initialize heap
+    {
+        use core::mem::MaybeUninit;
+        const HEAP_SIZE: usize = 1024;
+        static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+        unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+    }
+    
+    // enable interrupt 
     pac::NVIC::unpend(pac::interrupt::EXTI15_10);
     unsafe {
         pac::NVIC::unmask(pac::interrupt::EXTI15_10);
@@ -102,7 +122,7 @@ fn main_loop() -> Result<()> {
 
 #[entry]
 fn main() -> ! {
-    if let Err(_) = main_loop() {
+    if let Err(_) = init() {
         loop { }
     };
 
