@@ -10,7 +10,7 @@ use k256::{self, ecdsa::SigningKey, elliptic_curve::sec1::ToEncodedPoint};
 use rand::Rng;
 use sha3::{Keccak256, Digest};
 
-use crate::RNG;
+use crate::global::*;
 
 use super::{safe_zone::{SafeZone, Context}, ACCOUNT_NUM, utils::get_cipher};
 

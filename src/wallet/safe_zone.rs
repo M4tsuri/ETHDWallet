@@ -39,6 +39,7 @@ pub struct Signature {
 
 impl SafeZone {
     pub fn load() -> Self {
+        
         todo!()
     }
 
