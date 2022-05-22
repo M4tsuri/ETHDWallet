@@ -24,6 +24,7 @@ mod main_loop;
 mod init;
 mod global;
 mod interrupts;
+mod input;
 
 #[global_allocator]
 static ALLOCATOR: CortexMHeap = CortexMHeap::empty();
@@ -42,6 +43,9 @@ fn main() -> ! {
     if let Err(_) = main_loop::main_loop() {
         loop { }
     };
-    loop { }
+    
+    loop { 
+        cortex_m::asm::wfi()
+    }
 }
 
