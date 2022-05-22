@@ -1,37 +1,55 @@
-use cortex_m::interrupt::{CriticalSection, free};
+use core::sync::atomic;
+
+use cortex_m::interrupt::free;
+use cortex_m::prelude::*;
 use stm32f4::stm32f407::interrupt;
+use stm32f4xx_hal::block;
 
-use crate::global::*;
+use crate::{global::*, update_global};
 
-pub fn set_led(cs: &CriticalSection) {
-    let state = LED_STATE.borrow(cs).get();
-    let mut led = LED.borrow(cs).take().unwrap();
+pub fn set_led() {
+    let state = LED_STATE.fetch_xor(
+        true, atomic::Ordering::Relaxed
+    );
 
-    if state {
-        led.set_high()
-    } else {
-        led.set_low()
-    };
-
-    LED.borrow(cs).set(Some(led));
-    LED_STATE.borrow(cs).set(state ^ true);
+    update_global!(|mut led: Option<LED>| {
+        if state {
+            led.set_high()
+        } else {
+            led.set_low()
+        };
+    });
 }
 
 #[allow(non_snake_case)]
 #[interrupt]
 fn EXTI15_10() {
-    free(|cs| {
-        let exti = EXTI.borrow(cs).take().unwrap();
-        
+    update_global!(|exti: Option<EXTI>| {
         let pr = exti.pr.read();
         if pr.pr13().bit_is_set() {
             // when an interrupt is triggered, the pending bit corresponding to 
             // the interrupt line is set. This request can be reset by writing 
             // a 1 in the pending register
             exti.pr.write(|w| w.pr13().set_bit());
-            set_led(cs);
         }
+    });
 
-        EXTI.borrow(cs).set(Some(exti));
-    })
+    set_led();
+}
+
+#[allow(non_snake_case)]
+#[interrupt]
+fn USART1() {
+    update_global!(|mut rx: Option<SERIAL_RX>| {
+        while rx.is_rx_not_empty() {
+            match block!(rx.read()) {
+                Ok(byte) => {
+                    update_global!(|mut buf: Copy<MSG_BUFFER>| {
+                        buf.read(byte)
+                    })
+                },
+                Err(_error) => {}
+            }
+        }
+    });
 }
