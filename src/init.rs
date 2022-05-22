@@ -3,19 +3,19 @@ use core::intrinsics::transmute;
 use cortex_m::interrupt::free;
 use stm32f4::stm32f407::{
     GPIOH, GPIOD, GPIOA, GPIOB,
-    self
+    self, USART1, I2C1
 };
 use stm32f4xx_hal::{
     pac,
     i2c::{I2c1, self},
     rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
-    gpio::Edge, flash::LockedFlash
+    gpio::{Edge, gpioa, gpiod, gpiob}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
-use crate::ALLOCATOR;
+use crate::{ALLOCATOR, set_global};
 use crate::{
     global::*,
     error::Result
@@ -42,19 +42,52 @@ fn clock_init(rcc: Rcc) -> Clocks {
         .freeze()
 }
 
-pub fn init() -> Result<()> {
-    let (Some(mut dp), Some(_cp)) = (
-        stm32f407::Peripherals::take(),
-        cortex_m::peripheral::Peripherals::take(),
-    ) else {
-        loop { }
-    };
+/// initialize serial port
+fn serial_init(gpioa: gpioa::Parts, usart1: USART1, clk: &Clocks) -> Result<()> {
+    let pins = (
+        gpioa
+            .pa9
+            .into_alternate(),
+        gpioa
+            .pa10
+            .into_alternate()
+    );
+    let config = serial::Config::default().baudrate(14330.bps());
+    let serial = Serial::new(
+        usart1, pins, config, clk
+    )?.with_u8_data();
 
-    gpio_init(&dp);
-    let clocks = clock_init(dp.RCC.constrain());
+    let (mut tx, mut rx) = serial.split();
+    tx.listen();
+    rx.listen();
 
-    // initialize random source
-    let mut rand_source = dp.RNG.constrain(&clocks);
+    free(|cs| {
+        set_global!(SERIAL_RX, rx, cs);
+        set_global!(SERIAL_TX, tx, cs);
+    });
+
+    Ok(())
+}
+
+fn keyboard_init(gpiod: gpiod::Parts, exti: &mut pac::EXTI, syscfg: &mut SysCfg) {
+    // initialize triggering keyboard interrupt
+    let mut key_trigger = gpiod.pd13.into_pull_down_input();
+    key_trigger.make_interrupt_source(syscfg);
+    key_trigger.trigger_on_edge(exti, Edge::Falling);
+
+    free(|cs| {
+        set_global!(KEY_TRIGGER, key_trigger, cs);
+    })
+}
+
+fn heap_init() {
+    use core::mem::MaybeUninit;
+    const HEAP_SIZE: usize = 1024;
+    static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
+    unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
+}
+
+fn rng_init(mut rand_source: Rng) {
     let seed: [u64; 4] = array_init::array_init(|_| {
         rand_source.next_u64()
     });
@@ -63,48 +96,62 @@ pub fn init() -> Result<()> {
         transmute(seed)
     });
 
-    // initialize i2c
-    let i2c_parts = dp.GPIOB.split();
-    let i2c_pins = (i2c_parts.pb6, i2c_parts.pb7);
-    let _i2c1 = I2c1::new(
-        dp.I2C1, 
+    free(|cs| {
+        set_global!(RNG, rng, cs);
+    })
+}
+
+fn i2c1_init(gpiob: gpiob::Parts, i2c1: I2C1, clk: &Clocks) {
+
+    let i2c_pins = (gpiob.pb6, gpiob.pb7);
+    let i2c1 = I2c1::new(
+        i2c1,
         i2c_pins,
         i2c::Mode::Fast { 
             frequency: 100000.Hz(), 
             duty_cycle: i2c::DutyCycle::Ratio2to1 
         },
-        &clocks
+        clk
     );
 
-    // initialize triggering keyboard interrupt
+    free(|cs| {
+        set_global!(I2C1, i2c1, cs);
+    })
+}
+
+pub fn init() -> Result<()> {
+    let (Some(mut dp), Some(_cp)) = (
+        stm32f407::Peripherals::take(),
+        cortex_m::peripheral::Peripherals::take(),
+    ) else {
+        loop { }
+    };
+
+    heap_init();
+    gpio_init(&dp);
+
+    let clocks = clock_init(dp.RCC.constrain());
     let mut syscfg = dp.SYSCFG.constrain();
-    let gpiod = dp.GPIOD.split();
-    let mut key_trigger = gpiod.pd13.into_pull_down_input();
-    key_trigger.make_interrupt_source(&mut syscfg);
-    key_trigger.trigger_on_edge(&mut dp.EXTI, Edge::Falling);
+    
+    rng_init(dp.RNG.constrain(&clocks));
+    i2c1_init(dp.GPIOB.split(), dp.I2C1, &clocks);
+    serial_init(dp.GPIOA.split(), dp.USART1, &clocks)?;
+    keyboard_init(dp.GPIOD.split(), &mut dp.EXTI, &mut syscfg);
 
     let gpiof = dp.GPIOF.split();
 
     free(|cs| {
         LED.borrow(cs).set(Some(gpiof.pf10.into_push_pull_output()));
         EXTI.borrow(cs).set(Some(dp.EXTI));
-        RNG.borrow(cs).set(Some(rng));
-        KEY_TRIGGER.borrow(cs).set(Some(key_trigger));
         FLASH.borrow(cs).set(Some(LockedFlash::new(dp.FLASH)));
     });
-
-    // initialize heap
-    {
-        use core::mem::MaybeUninit;
-        const HEAP_SIZE: usize = 1024;
-        static mut HEAP: [MaybeUninit<u8>; HEAP_SIZE] = [MaybeUninit::uninit(); HEAP_SIZE];
-        unsafe { ALLOCATOR.init(HEAP.as_ptr() as usize, HEAP_SIZE) }
-    }
     
-    // enable interrupt 
+    // enable interrupts
     pac::NVIC::unpend(pac::interrupt::EXTI15_10);
+    pac::NVIC::unpend(pac::interrupt::USART1);
     unsafe {
         pac::NVIC::unmask(pac::interrupt::EXTI15_10);
+        pac::NVIC::unmask(pac::interrupt::USART1);
     }
 
     Ok(())
