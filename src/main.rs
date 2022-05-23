@@ -40,12 +40,6 @@ fn main() -> ! {
         loop { }
     };
 
-    if let Err(_) = main_loop::main_loop() {
-        loop { }
-    };
-    
-    loop { 
-        cortex_m::asm::wfi()
-    }
+    main_loop::main_loop()
 }
 

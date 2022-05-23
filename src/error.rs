@@ -1,10 +1,13 @@
 use stm32f4xx_hal::serial::config::InvalidConfig;
 
+#[repr(u8)]
 pub enum Error {
     HalInitError,
     AccountIdxOOB,
     CryptoError,
-    InvalidSerialConfig
+    InvalidSerialConfig,
+    InvalidInstruction,
+    SerialDataCorrupted
 }
 
 impl From<k256::ecdsa::Error> for Error {
