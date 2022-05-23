@@ -40,14 +40,10 @@ fn EXTI15_10() {
 #[allow(non_snake_case)]
 #[interrupt]
 fn USART1() {
-    update_global!(|mut rx: Option<SERIAL_RX>| {
+    update_global!(|mut rx: Option<SERIAL_RX>, mut buf: Copy<MSG_BUFFER>| {
         while rx.is_rx_not_empty() {
             match block!(rx.read()) {
-                Ok(byte) => {
-                    update_global!(|mut buf: Copy<MSG_BUFFER>| {
-                        buf.read(byte)
-                    })
-                },
+                Ok(byte) => buf.read(byte),
                 Err(_error) => {}
             }
         }
