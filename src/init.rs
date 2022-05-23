@@ -132,6 +132,14 @@ pub fn init() -> Result<()> {
     heap_init();
     gpio_init(&dp);
 
+    // see https://github.com/probe-rs/probe-rs/issues/350
+    dp.DBGMCU.cr.modify(|_, w| {
+        w.dbg_sleep().set_bit();
+        w.dbg_standby().set_bit();
+        w.dbg_stop().set_bit()
+    });
+    dp.RCC.ahb1enr.modify(|_, w| w.dma1en().enabled());
+
     let clocks = clock_init(dp.RCC.constrain());
     let mut syscfg = dp.SYSCFG.constrain();
     
