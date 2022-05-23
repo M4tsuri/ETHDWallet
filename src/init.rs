@@ -59,9 +59,9 @@ fn serial_init(gpioa: gpioa::Parts, usart1: USART1, clk: &Clocks) -> Result<()> 
         usart1, pins, config, clk
     )?.with_u8_data();
 
-    let (mut tx, mut rx) = serial.split();
-    tx.listen();
+    let (tx, mut rx) = serial.split();
     rx.listen();
+    rx.unlisten_idle();
 
     free(|cs| {
         set_global!(SERIAL_RX, rx, cs);
@@ -104,7 +104,6 @@ fn rng_init(mut rand_source: Rng) {
 }
 
 fn i2c1_init(gpiob: gpiob::Parts, i2c1: I2C1, clk: &Clocks) {
-
     let i2c_pins = (gpiob.pb6, gpiob.pb7);
     let i2c1 = I2c1::new(
         i2c1,
