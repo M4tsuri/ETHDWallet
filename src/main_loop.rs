@@ -20,6 +20,7 @@ use crate::{
 
 pub fn main_loop() -> ! {
     let wallet = wallet();
+
     loop {
         cortex_m::asm::wfi();
         let _result: Result<()> = update_global!(|
@@ -45,6 +46,7 @@ pub fn main_loop() -> ! {
                 },
             }
 
+            tx.bflush()?;
             // this will become the new global buffer
             buf = MsgBuffer::new();
             Ok(())
