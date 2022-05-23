@@ -1,13 +1,15 @@
-use cortex_m::interrupt::free;
-use stm32f4xx_hal::gpio::ExtiPin;
-use alloc::vec::Vec;
+use cortex_m::prelude::*;
+use stm32f4::stm32f407::USART1;
+use stm32f4xx_hal::{serial::Tx, block};
+use crate::error::Result;
 
 use crate::{
     global::*, 
     update_global, 
     wallet::{
-        initializer::try_initialize_wallet, 
-        Wallet, safe_zone::{Signature, EthAddr}, ACCOUNT_NUM, utils::get_cipher
+        Wallet, wallet,
+        safe_zone::{Signature, EthAddr},
+        ACCOUNT_NUM
     }, 
     input::{
         MsgBufferState, 
@@ -17,34 +19,37 @@ use crate::{
 };
 
 pub fn main_loop() -> ! {
-    update_global!(|mut keyboard: Option<KEY_TRIGGER>, mut exti: Option<EXTI>| {
-        keyboard.enable_interrupt(&mut exti);
-    });
-
-    let wallet = try_initialize_wallet();
-
+    let wallet = wallet();
     loop {
         cortex_m::asm::wfi();
-        update_global!(|mut buf: Copy<MSG_BUFFER>| {
-            let result = match buf.state {
+        let _result: Result<()> = update_global!(|
+            mut buf: Copy<MSG_BUFFER>, 
+            mut tx: Option<SERIAL_TX>
+        | {
+            match match buf.state {
                 MsgBufferState::Finished => {
-                    dispatch(buf, wallet);
+                    dispatch(buf, wallet)
                 },
                 MsgBufferState::Invalid => {
-                    Error::SerialDataCorrupted;
+                    Err(Error::SerialDataCorrupted)
                 },
-                _ => {}
-            };
-
+                _ => return Ok(())
+            } {
+                Ok(resp) => {
+                    block!(tx.write(0x00))?;
+                    resp.write_tx(&mut tx)?;
+                },
+                Err(e) => {
+                    block!(tx.write(0xff))?;
+                    block!(tx.write(e as u8))?;
+                },
+            }
 
             // this will become the new global buffer
-            buf = MsgBuffer::new()
+            buf = MsgBuffer::new();
+            Ok(())
         });
     }
-}
-
-fn error_report() {
-    todo!()
 }
 
 /// defines an instruction
@@ -65,33 +70,34 @@ enum Response {
     AddressList([EthAddr; ACCOUNT_NUM])
 }
 
-impl Into<Vec<u8>> for Response {
-    fn into(self) -> Vec<u8> {
+impl Response {
+    fn write_tx(&self, tx: &mut Tx<USART1>) -> Result<()> {
         match self {
             Response::Signature(Signature { 
                 r, s, v 
             }) => {
-                let mut res = Vec::new();
-                res.push(0);
-                res.extend_from_slice(&r);
-                res.extend_from_slice(&s);
-                res.push(v);
-                res
+                block!(tx.write(0x00))?;
+                tx.bwrite_all(r)?;
+                tx.bwrite_all(s)?;
+                block!(tx.write(*v))?;
             },
             Response::Address(addr) => {
-                addr.to_vec()
+                tx.bwrite_all(addr)?;
             },
             Response::AddressList(list) => {
-                list.into_iter().flatten().collect()
+                list.into_iter().try_for_each(|addr| {
+                    tx.bwrite_all(addr)
+                })?;
             },
         }
+        Ok(())
     }
 }
 
 impl<'raw> TryFrom<&'raw [u8]> for Instruction<'raw> {
     type Error = error::Error;
 
-    fn try_from(value: &'raw [u8]) -> Result<Self, Self::Error> {
+    fn try_from(value: &'raw [u8]) -> core::result::Result<Self, Self::Error> {
         Ok(match *value.get(0).ok_or(Error::InvalidInstruction)? {
             0 if value.len() > 2 => {
                 Self::SignTransaction(value[1], &value[2..])
@@ -103,17 +109,15 @@ impl<'raw> TryFrom<&'raw [u8]> for Instruction<'raw> {
     }
 }
 
-fn dispatch(buf: MsgBuffer, wallet: &mut Wallet) -> error::Result<Response> {
+fn dispatch(buf: MsgBuffer, wallet: &Wallet) -> error::Result<Response> {
     let instr: Instruction = (&buf.buf[..buf.msg_len as usize]).try_into()?;
 
     Ok(match instr {
         Instruction::SignTransaction(idx, raw) => {
-            let cipher = wallet.cipher.get_or_insert(get_cipher(
-                KeyInputBuffer::wait_for_key(), &wallet.chacha_iv
-            ));
+            wallet.fill_cipher(KeyInputBuffer::wait_for_key())?;
             
             Response::Signature(
-                wallet.zone.sign_raw(raw, idx as usize, cipher)?
+                wallet.sign_raw(idx as usize, raw)?
             )
         },
         Instruction::GetAddress(idx) => {
