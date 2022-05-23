@@ -4,7 +4,7 @@ use chacha20::{cipher::{StreamCipher, StreamCipherSeek}, ChaCha20};
 
 use crate::{error::Error, input::FIXED_KEY_LEN};
 
-use super::{OTP_SECRET_LEN, ACCOUNT_NUM, utils::get_cipher};
+use super::{OTP_SECRET_LEN, ACCOUNT_NUM, utils::get_cipher, Wallet};
 
 /// plaintext of the zkmagic field in encrypted safe zone
 pub const ZKPLAIN: [u8; 32] = [
@@ -17,7 +17,7 @@ pub const ZKPLAIN: [u8; 32] = [
 pub type PrivKey = [u8; 32];
 pub type EthAddr = [u8; 20];
 
-#[repr(C, packed)]
+#[derive(Clone, Copy)]
 pub struct SafeZone {
     // this magic allow us to decrypt the safe zone without knowing the passcode
     // this field is zero for an uninitialized wallet
@@ -35,8 +35,14 @@ pub struct Signature {
 }
 
 impl SafeZone {
+    /// load safezone from flash
     pub fn load() -> Self {
         
+        todo!()
+    }
+
+    /// save this safezone to memory
+    pub fn save(&self) {
         todo!()
     }
 
@@ -80,28 +86,5 @@ impl SafeZone {
             s: sig.s().to_bytes().into(), 
             v: sig.recovery_id().into()
         })
-    }
-}
-
-#[repr(C, packed)]
-pub struct Context {
-    pub initialized: bool,
-    pub zone: &'static mut SafeZone,
-    /// the iv of chacha, randomly generated.
-    /// this field is not encrypted 
-    pub chacha_iv: [u8; 12],
-    pub addrs: [EthAddr; ACCOUNT_NUM],
-}
-
-impl Context {
-    pub fn load() -> Self {
-        Self {
-            initialized: todo!(),
-            zone: singleton!(: 
-                SafeZone = SafeZone::load()
-            ).unwrap(), 
-            chacha_iv: todo!(), 
-            addrs: todo!() 
-        }
     }
 }
