@@ -1,11 +1,8 @@
 use core::{cmp::Ordering, mem::size_of};
 
 use chacha20::{cipher::{StreamCipher, StreamCipherSeek}, ChaCha20};
-use cortex_m::singleton;
-use k256::{Secp256k1, elliptic_curve::{Curve, bigint::ArrayEncoding}};
-use sha3::{Keccak256, Digest};
 
-use crate::error::Error;
+use crate::{error::Error, input::FIXED_KEY_LEN};
 
 use super::{OTP_SECRET_LEN, ACCOUNT_NUM, utils::get_cipher};
 
@@ -45,7 +42,7 @@ impl SafeZone {
 
     /// verify if passcode is correct
     /// returns generated cipher if passcode is correct, or None
-    pub fn verify_passcode(&self, passcode: &[u8], ctx: &Context) -> Option<ChaCha20> {
+    pub fn verify_passcode(&self, passcode: [u8; FIXED_KEY_LEN], ctx: &Wallet) -> Option<ChaCha20> {
         let mut cipher = get_cipher(passcode, &ctx.chacha_iv);
         let mut zkmagic = self.zkmagic;
         cipher.apply_keystream(&mut zkmagic);
