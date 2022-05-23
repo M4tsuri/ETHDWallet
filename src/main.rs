@@ -18,7 +18,6 @@ use crate::init::init;
 extern crate alloc;
 
 mod error;
-mod flash;
 mod wallet;
 mod main_loop;
 mod init;
@@ -36,10 +35,9 @@ fn oom(_: Layout) -> ! {
 
 #[entry]
 fn main() -> ! {
-    if let Err(_) = init() {
-        loop { }
-    };
-
-    main_loop::main_loop()
+    match init() {
+        Err(_) => loop { },
+        Ok(_) => main_loop::main_loop()
+    }
 }
 

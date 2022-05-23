@@ -1,6 +1,5 @@
 use core::sync::atomic;
 
-use cortex_m::interrupt::free;
 use cortex_m::prelude::*;
 use stm32f4::stm32f407::interrupt;
 use stm32f4xx_hal::block;
