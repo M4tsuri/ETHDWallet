@@ -8,14 +8,14 @@ use stm32f4xx_hal::{
     flash::LockedFlash, serial::{Tx, Rx}, i2c::I2c1
 };
 
-use crate::input::MsgBuffer;
+use crate::input::{MsgBuffer, KeyInputBuffer};
 
 macro_rules! global {
     (@option $name:ident: $ty:path) => {
         pub static $name: Mutex<Cell<Option<$ty>>> = Mutex::new(Cell::new(None));
     };
 
-    (@val $name:ident: $ty:path = $val:expr) => {
+    (@copy $name:ident: $ty:path = $val:expr) => {
         pub static $name: Mutex<Cell<$ty>> = Mutex::new(Cell::new($val));
     }
 }
@@ -32,8 +32,9 @@ macro_rules! update_global {
     (|$($($t:ident)+: $ty:ident<$global:ident>),*| $b:block) => {{
         free(|cs| {
             $(update_global!(@get $($t)+: $ty<$global>, cs);)*
-            $b
+            let block_result = $b;
             $(update_global!(@set $($t)+: $ty<$global>, cs);)*
+            block_result
         })
     }};
 
@@ -82,5 +83,6 @@ global!(@option SERIAL_TX: Tx<USART1>);
 global!(@option SERIAL_RX: Rx<USART1>);
 
 global!(@option I2C1: I2c1<(Pin<'B', 6, Input>, Pin<'B', 7, Input>)>);
-global!(@val MSG_BUFFER: MsgBuffer = MsgBuffer::new());
+global!(@copy MSG_BUFFER: MsgBuffer = MsgBuffer::new());
+global!(@copy KEY_BUFFER: KeyInputBuffer = KeyInputBuffer::new());
 
