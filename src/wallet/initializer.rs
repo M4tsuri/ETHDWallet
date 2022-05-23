@@ -41,6 +41,7 @@ unsafe fn initialize_wallet(passcode: [u8; 8]) {
     cipher.apply_keystream(&mut WALLET.zone.zkmagic);
     initialize_accounts(&mut cipher, &mut WALLET);
     // initialize OTP
+    WALLET.initialized = true;
 }
 
 /// generate accounts
