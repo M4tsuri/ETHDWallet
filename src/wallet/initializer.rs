@@ -5,41 +5,41 @@ use chacha20::{
         generic_array::sequence::Split
     }
 };
-use cortex_m::{interrupt::free, singleton};
+
 use k256::{self, ecdsa::SigningKey, elliptic_curve::sec1::ToEncodedPoint};
 use rand::Rng;
 use sha3::{Keccak256, Digest};
 
-use crate::{global::*, update_global};
+use crate::{global::*, update_global, input::KeyInputBuffer};
 
 use super::{ACCOUNT_NUM, utils::get_cipher};
-use super::Wallet;
+use super::{Wallet, wallet, WALLET};
+use crate::error::Result;
 
 /// check if the wallet is initialized. If not, initialize it.
-pub fn try_initialize_wallet() -> &'static mut Wallet {
-    let ctx = singleton!(:
-        Wallet = Wallet::load()
-    ).unwrap();
-
-    if !ctx.initialized {
+pub fn try_initialize_wallet() -> Result<()> {
+    if !wallet().initialized {
         // TODO get a user input password from keyboard
-        // initialize_wallet(passcode, ctx);
+        let passcode = KeyInputBuffer::wait_for_key();
+        unsafe {
+            initialize_wallet(passcode);
+        }
     }
 
-    ctx
+    Ok(())
 }
 
-fn initialize_wallet(passcode: [u8; 8], ctx: &mut Wallet) {
+unsafe fn initialize_wallet(passcode: [u8; 8]) {
     let iv: [u8; 12] = update_global!(|mut rng: Option<RNG>| {
         rng.gen()
     });
     
-    ctx.chacha_iv = iv;
+    WALLET.chacha_iv = iv;
 
     let mut cipher = get_cipher(passcode, &iv);
     
-    cipher.apply_keystream(&mut ctx.zone.zkmagic);
-    initialize_accounts(&mut cipher, ctx);
+    cipher.apply_keystream(&mut WALLET.zone.zkmagic);
+    initialize_accounts(&mut cipher, &mut WALLET);
     // initialize OTP
 }
 

@@ -1,10 +1,9 @@
-use core::{cmp::Ordering, mem::size_of};
+use core::mem::size_of;
 
 use chacha20::{cipher::{StreamCipher, StreamCipherSeek}, ChaCha20};
 
-use crate::{error::Error, input::FIXED_KEY_LEN};
-
-use super::{OTP_SECRET_LEN, ACCOUNT_NUM, utils::get_cipher, Wallet};
+use crate::error::Error;
+use super::{OTP_SECRET_LEN, ACCOUNT_NUM};
 
 /// plaintext of the zkmagic field in encrypted safe zone
 pub const ZKPLAIN: [u8; 32] = [
@@ -35,34 +34,10 @@ pub struct Signature {
 }
 
 impl SafeZone {
-    /// load safezone from flash
-    pub fn load() -> Self {
-        
-        todo!()
-    }
-
-    /// save this safezone to memory
-    pub fn save(&self) {
-        todo!()
-    }
-
-    /// verify if passcode is correct
-    /// returns generated cipher if passcode is correct, or None
-    pub fn verify_passcode(&self, passcode: [u8; FIXED_KEY_LEN], ctx: &Wallet) -> Option<ChaCha20> {
-        let mut cipher = get_cipher(passcode, &ctx.chacha_iv);
-        let mut zkmagic = self.zkmagic;
-        cipher.apply_keystream(&mut zkmagic);
-
-        match zkmagic.cmp(&ZKPLAIN) {
-            Ordering::Equal => Some(cipher),
-            _ => None
-        }
-    }
-
     /// sign a raw transaction, returns the signature
     /// the cipher is guaranteed to be correct
-    pub fn sign_raw(
-        &self, raw: &[u8], idx: usize, cipher: &mut ChaCha20
+    pub(super) fn sign_raw(
+        &self, idx: usize, raw: &[u8], cipher: &mut ChaCha20
     ) -> Result<Signature, Error> {
         use k256::ecdsa::{
             SigningKey,

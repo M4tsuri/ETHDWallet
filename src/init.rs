@@ -15,10 +15,12 @@ use stm32f4xx_hal::{
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
 
-use crate::{ALLOCATOR, set_global};
 use crate::{
+    ALLOCATOR,
+    set_global,
+    wallet::initializer::try_initialize_wallet,
     global::*,
-    error::Result
+    error::{Result, Error}
 };
 
 /// initialize GPIO
@@ -124,7 +126,7 @@ pub fn init() -> Result<()> {
         stm32f407::Peripherals::take(),
         cortex_m::peripheral::Peripherals::take(),
     ) else {
-        loop { }
+        return Err(Error::HalInitError)
     };
 
     heap_init();
@@ -154,7 +156,7 @@ pub fn init() -> Result<()> {
         pac::NVIC::unmask(pac::interrupt::USART1);
     }
 
-    Ok(())
+    try_initialize_wallet()
 
     // // Create a delay abstraction based on SysTick
     // let mut delay = cp.SYST.delay(&clocks);

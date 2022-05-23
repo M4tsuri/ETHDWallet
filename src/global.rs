@@ -1,5 +1,6 @@
 use core::{cell::Cell, sync::atomic::AtomicBool};
 
+use chacha20::ChaCha20;
 use cortex_m::interrupt::Mutex;
 use rand_chacha::ChaCha20Rng;
 use stm32f4::stm32f407::{self, USART1};
@@ -30,6 +31,7 @@ macro_rules! set_global {
 #[macro_export]
 macro_rules! update_global {
     (|$($($t:ident)+: $ty:ident<$global:ident>),*| $b:block) => {{
+        use cortex_m::interrupt::free;
         free(|cs| {
             $(update_global!(@get $($t)+: $ty<$global>, cs);)*
             let block_result = $b;
@@ -85,4 +87,6 @@ global!(@option SERIAL_RX: Rx<USART1>);
 global!(@option I2C1: I2c1<(Pin<'B', 6, Input>, Pin<'B', 7, Input>)>);
 global!(@copy MSG_BUFFER: MsgBuffer = MsgBuffer::new());
 global!(@copy KEY_BUFFER: KeyInputBuffer = KeyInputBuffer::new());
+
+global!(@option CIPHER: ChaCha20);
 
