@@ -1,7 +1,7 @@
 use chacha20::{
     ChaCha20,
     cipher::{
-        KeyIvInit, StreamCipher, 
+        StreamCipher, 
         generic_array::sequence::Split
     }
 };
@@ -10,34 +10,28 @@ use k256::{self, ecdsa::SigningKey, elliptic_curve::sec1::ToEncodedPoint};
 use rand::Rng;
 use sha3::{Keccak256, Digest};
 
-use crate::global::*;
+use crate::{global::*, update_global};
 
-use super::{safe_zone::{SafeZone, Context}, ACCOUNT_NUM, utils::get_cipher};
+use super::{ACCOUNT_NUM, utils::get_cipher};
+use super::Wallet;
 
 /// check if the wallet is initialized. If not, initialize it.
-pub fn try_initialize_wallet() -> &'static Context {
-    // TODO check if wallet is initialized, i.e. initialize the zone
-    // TODO get a user input password from keyboard
-
-    // let passcode = todo!();
-    // initialize_wallet(passcode)
+pub fn try_initialize_wallet() -> &'static mut Wallet {
     let ctx = singleton!(:
-        Context = Context::load()
+        Wallet = Wallet::load()
     ).unwrap();
 
     if !ctx.initialized {
+        // TODO get a user input password from keyboard
         // initialize_wallet(passcode, ctx);
     }
 
     ctx
 }
 
-fn initialize_wallet(passcode: &[u8], ctx: &mut Context) {
-    let iv = free(|cs| {
-        let mut rng = RNG.borrow(cs).take().unwrap();
-        let iv: [u8; 12] = rng.gen();
-        RNG.borrow(cs).set(Some(rng));
-        iv
+fn initialize_wallet(passcode: [u8; 8], ctx: &mut Wallet) {
+    let iv: [u8; 12] = update_global!(|mut rng: Option<RNG>| {
+        rng.gen()
     });
     
     ctx.chacha_iv = iv;
@@ -47,17 +41,14 @@ fn initialize_wallet(passcode: &[u8], ctx: &mut Context) {
     cipher.apply_keystream(&mut ctx.zone.zkmagic);
     initialize_accounts(&mut cipher, ctx);
     // initialize OTP
-
 }
 
-fn initialize_accounts(cipher: &mut ChaCha20, ctx: &mut Context) {
-    // generate accounts
-    let mut rng = free(|cs| {
-        RNG.borrow(cs).take().unwrap()
-    });
-
+/// generate accounts
+fn initialize_accounts(cipher: &mut ChaCha20, ctx: &mut Wallet) {
     for i in 0..ACCOUNT_NUM {
-        let key = SigningKey::random(&mut rng);
+        let key = update_global!(|mut rng: Option<RNG>| {
+            SigningKey::random(&mut rng)
+        });
 
         let mut privkey: [u8; 32] = key.to_bytes().into();
         cipher.apply_keystream(&mut privkey);
@@ -71,8 +62,4 @@ fn initialize_accounts(cipher: &mut ChaCha20, ctx: &mut Context) {
         ctx.zone.keys[i] = privkey;
         ctx.addrs[i] = addr.into();
     }
-
-    free(|cs| {
-        RNG.borrow(cs).set(Some(rng))
-    });
 }
