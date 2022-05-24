@@ -5,8 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "stm32-gdb",
+            "type": "gdb",
+            "request": "launch",
+            "gdbpath": "arm-none-eabi-gdb",
+            "debugger_args": ["--nx", "--command",  "${workspaceFolder}/.gdbinit"],
+            "target": "${workspaceFolder}/target/thumbv7em-none-eabi/debug/coursework",
             "cwd": "${workspaceFolder}",
-            "executable": "${workspaceRoot}/target/thumbv7em-none-eabi/release/coursework",
+        },
+        {
+            "cwd": "${workspaceFolder}",
+            "executable": "${workspaceRoot}/target/thumbv7em-none-eabi/debug/coursework",
             "name": "Debug with ST-Link",
             "request": "launch",
             "stlinkPath": "st-util",
@@ -14,7 +23,8 @@
             "runToEntryPoint": "main",
             "showDevDebugOutput": "none",
             "servertype": "stlink"
-        }
+        },
+
         
     ]
 }
