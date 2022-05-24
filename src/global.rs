@@ -87,6 +87,7 @@ global!(@option SERIAL_RX: Rx<USART1>);
 global!(@option I2C1: I2c1<(Pin<'B', 6, Input>, Pin<'B', 7, Input>)>);
 global!(@copy MSG_BUFFER: MsgBuffer = MsgBuffer::new());
 global!(@copy KEY_BUFFER: KeyInputBuffer = KeyInputBuffer::new());
+global!(@option FLASH: LockedFlash);
 
 global!(@option CIPHER: ChaCha20);
 

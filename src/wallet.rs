@@ -24,7 +24,7 @@ pub(super) const OTP_SECRET_LEN: usize = 64;
 /// The initial value will be changed after the wallet is initialized
 #[link_section = ".wallet"]
 #[no_mangle]
-pub(super) static mut WALLET: Wallet = Wallet { 
+pub static WALLET: Wallet = Wallet { 
     initialized: false, 
     zone: SafeZone {
         zkmagic: ZKPLAIN,
@@ -35,10 +35,10 @@ pub(super) static mut WALLET: Wallet = Wallet {
     addrs: [[0; 20]; ACCOUNT_NUM]
 };
 
-pub fn wallet() -> &'static Wallet {
-    unsafe { &WALLET }
-}
+pub const WALLET_SECTOR: u8 = 8;
 
+#[repr(align(16))]
+#[derive(Clone, Copy)]
 pub struct Wallet {
     pub initialized: bool,
     pub zone: SafeZone,

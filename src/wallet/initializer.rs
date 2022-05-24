@@ -1,3 +1,5 @@
+use core::{ptr::addr_of, intrinsics::size_of, slice};
+
 use chacha20::{
     ChaCha20,
     cipher::{
@@ -9,39 +11,57 @@ use chacha20::{
 use k256::{self, ecdsa::SigningKey, elliptic_curve::sec1::ToEncodedPoint};
 use rand::Rng;
 use sha3::{Keccak256, Digest};
+use stm32f4xx_hal::flash::FlashExt;
 
-use crate::{global::*, update_global, input::KeyInputBuffer};
+use crate::{global::*, update_global, input::KeyInputBuffer, wallet::WALLET_SECTOR};
 
 use super::{ACCOUNT_NUM, utils::get_cipher};
-use super::{Wallet, wallet, WALLET};
+use super::{Wallet, WALLET};
 use crate::error::Result;
 
 /// check if the wallet is initialized. If not, initialize it.
 pub fn try_initialize_wallet() -> Result<()> {
-    if !wallet().initialized {
+    if WALLET.initialized {
         // TODO get a user input password from keyboard
         let passcode = KeyInputBuffer::wait_for_key();
-        unsafe {
-            initialize_wallet(passcode);
-        }
+        initialize_wallet(passcode);
     }
 
     Ok(())
 }
 
-unsafe fn initialize_wallet(passcode: [u8; 8]) {
+fn initialize_wallet(passcode: [u8; 8]) {
     let iv: [u8; 12] = update_global!(|mut rng: Option<RNG>| {
         rng.gen()
     });
+
+    let mut wallet = WALLET;
     
-    WALLET.chacha_iv = iv;
+    wallet.chacha_iv = iv;
 
     let mut cipher = get_cipher(passcode, &iv);
     
-    cipher.apply_keystream(&mut WALLET.zone.zkmagic);
-    initialize_accounts(&mut cipher, &mut WALLET);
+    cipher.apply_keystream(&mut wallet.zone.zkmagic);
+    initialize_accounts(&mut cipher, &mut wallet);
     // initialize OTP
-    WALLET.initialized = true;
+    wallet.initialized = true;
+
+    let wallet_addr = addr_of!(wallet);
+    let wallet_size = size_of::<Wallet>();
+
+    // program the wallet to flash
+    update_global!(|mut flash: Option<FLASH>| {
+        let wallet_slice = unsafe {
+            slice::from_raw_parts(wallet_addr as *const u8, wallet_size)
+        };
+
+        let mut unlocked = flash.unlocked();
+        unlocked.erase(WALLET_SECTOR).unwrap();
+        unlocked.program(
+            wallet_addr as usize, 
+            wallet_slice.iter()
+        ).unwrap();
+    })
 }
 
 /// generate accounts
