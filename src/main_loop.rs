@@ -84,9 +84,11 @@ impl Response {
                 block!(tx.write(*v))?;
             },
             Response::Address(addr) => {
+                block!(tx.write(0x01))?;
                 tx.bwrite_all(addr)?;
             },
             Response::AddressList(list) => {
+                block!(tx.write(0x02))?;
                 list.into_iter().try_for_each(|addr| {
                     tx.bwrite_all(addr)
                 })?;
