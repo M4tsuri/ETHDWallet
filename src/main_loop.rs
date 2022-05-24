@@ -7,7 +7,7 @@ use crate::{
     global::*, 
     update_global, 
     wallet::{
-        Wallet, wallet,
+        Wallet, WALLET,
         safe_zone::{Signature, EthAddr},
         ACCOUNT_NUM
     }, 
@@ -19,8 +19,6 @@ use crate::{
 };
 
 pub fn main_loop() -> ! {
-    let wallet = wallet();
-
     loop {
         cortex_m::asm::wfi();
         let _result: Result<()> = update_global!(|
@@ -29,11 +27,14 @@ pub fn main_loop() -> ! {
         | {
             match match buf.state {
                 MsgBufferState::Finished => {
-                    dispatch(buf, wallet)
+                    dispatch(buf, &WALLET)
                 },
                 MsgBufferState::Invalid => {
                     Err(Error::SerialDataCorrupted)
                 },
+                MsgBufferState::Error(e) => {
+                    Err(e)
+                }
                 _ => return Ok(())
             } {
                 Ok(resp) => {
@@ -114,6 +115,10 @@ impl<'raw> TryFrom<&'raw [u8]> for Instruction<'raw> {
 }
 
 fn dispatch(buf: MsgBuffer, wallet: &Wallet) -> error::Result<Response> {
+    if !WALLET.initialized {
+        return Err(Error::WalletNotInitialized)
+    }
+    
     let instr: Instruction = (&buf.buf[..buf.msg_len as usize]).try_into()?;
 
     Ok(match instr {
