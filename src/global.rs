@@ -3,10 +3,11 @@ use core::{cell::Cell, sync::atomic::AtomicBool};
 use chacha20::ChaCha20;
 use cortex_m::interrupt::Mutex;
 use rand_chacha::ChaCha20Rng;
-use stm32f4::stm32f407::{self, USART1};
+use stm32f4::stm32f407::{self, USART1, TIM1};
 use stm32f4xx_hal::{
     gpio::{Output, Input, Pin}, 
-    flash::LockedFlash, serial::{Tx, Rx}, i2c::I2c1
+    serial::{Tx, Rx}, i2c::I2c1,
+    rcc::Clocks, timer::Delay, flash::LockedFlash
 };
 
 use crate::input::{MsgBuffer, KeyInputBuffer};
@@ -28,13 +29,18 @@ macro_rules! set_global {
     }
 }
 
+/// update the value of a global variable through a block
+/// 
+/// **DO NOT EARLY RETURN IN YOUR BLOCK**
+/// 
+/// use break label instead
 #[macro_export]
 macro_rules! update_global {
     (|$($($t:ident)+: $ty:ident<$global:ident>),*| $b:block) => {{
         use cortex_m::interrupt::free;
         free(|cs| {
             $(update_global!(@get $($t)+: $ty<$global>, cs);)*
-            let block_result = $b;
+            let block_result = (|| { $b })();
             $(update_global!(@set $($t)+: $ty<$global>, cs);)*
             block_result
         })
@@ -79,15 +85,27 @@ pub static LED_STATE: AtomicBool = AtomicBool::new(true);
 global!(@option EXTI: stm32f407::EXTI);
 global!(@option RNG: ChaCha20Rng);
 global!(@option KEY_TRIGGER: Pin<'D', 13, Input>);
-global!(@option FLASH: LockedFlash);
 
 global!(@option SERIAL_TX: Tx<USART1>);
 global!(@option SERIAL_RX: Rx<USART1>);
 
-global!(@option I2C1: I2c1<(Pin<'B', 6, Input>, Pin<'B', 7, Input>)>);
+
+pub type I2cPins = (Pin<'B', 6, Input>, Pin<'B', 7, Input>);
+pub type I2cType = I2c1<I2cPins>;
+// I2C1 open : 
+// [
+//  false <repeats 56 times>, true, 
+//  false <repeats 15 times>, true, 
+//  false, false, false, false, true, 
+//  false, true, false <repeats 48 times>
+// ]
+global!(@option I2C1: I2cType);
 global!(@copy MSG_BUFFER: MsgBuffer = MsgBuffer::new());
 global!(@copy KEY_BUFFER: KeyInputBuffer = KeyInputBuffer::new());
 global!(@option FLASH: LockedFlash);
 
 global!(@option CIPHER: ChaCha20);
+global!(@option CLOCK: Clocks);
 
+pub type TIM1Delay = Delay<TIM1, 15000>;
+global!(@option DELAY: TIM1Delay);

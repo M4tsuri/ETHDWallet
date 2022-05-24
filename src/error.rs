@@ -1,10 +1,7 @@
-use stm32f4xx_hal::{
-    serial::{
-        config::InvalidConfig,
-        self
-    }, 
-    nb
-};
+use stm32f4xx_hal::{serial::{
+    config::InvalidConfig,
+    self
+}, i2c};
 
 #[repr(u8)]
 #[derive(Clone, Copy)]
@@ -16,7 +13,15 @@ pub enum Error {
     InvalidInstruction,
     SerialDataCorrupted,
     WrongPassword,
-    SerialTxError
+    SerialTxError,
+    I2cError,
+    WalletNotInitialized
+}
+
+impl From<i2c::Error> for Error {
+    fn from(_: i2c::Error) -> Self {
+        Self::I2cError
+    }
 }
 
 impl From<&mut Error> for Error  {

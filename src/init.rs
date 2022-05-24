@@ -103,21 +103,16 @@ fn rng_init(mut rand_source: Rng) {
     })
 }
 
-fn i2c1_init(gpiob: gpiob::Parts, i2c1: I2C1, clk: &Clocks) {
-    let i2c_pins = (gpiob.pb6, gpiob.pb7);
-    let i2c1 = I2c1::new(
+pub fn i2c1_init(pins: I2cPins, i2c1: I2C1, clk: &Clocks) -> I2cType {
+    I2c1::new(
         i2c1,
-        i2c_pins,
+        pins,
         i2c::Mode::Fast { 
             frequency: 100000.Hz(), 
             duty_cycle: i2c::DutyCycle::Ratio2to1 
         },
         clk
-    );
-
-    free(|cs| {
-        set_global!(I2C1, i2c1, cs);
-    })
+    )
 }
 
 pub fn init() -> Result<()> {
@@ -143,16 +138,27 @@ pub fn init() -> Result<()> {
     let mut syscfg = dp.SYSCFG.constrain();
     
     rng_init(dp.RNG.constrain(&clocks));
-    i2c1_init(dp.GPIOB.split(), dp.I2C1, &clocks);
-    serial_init(dp.GPIOA.split(), dp.USART1, &clocks)?;
+
+    serial_init(dp.GPIOA.split(), dp.USART1, &clocks, dp.DMA2)?;
     keyboard_init(dp.GPIOD.split(), &mut dp.EXTI, &mut syscfg);
 
     let gpiof = dp.GPIOF.split();
+    let gpiob = dp.GPIOB.split();
+    let mut delay = dp.TIM1.delay(&clocks);
 
+    let i2c_pins = set_i2c_bus(
+        (gpiob.pb6, gpiob.pb7), &mut delay
+    );
     free(|cs| {
-        LED.borrow(cs).set(Some(gpiof.pf10.into_push_pull_output()));
-        EXTI.borrow(cs).set(Some(dp.EXTI));
-        FLASH.borrow(cs).set(Some(LockedFlash::new(dp.FLASH)));
+        set_global!(I2C1, i2c1_init(
+            i2c_pins, 
+            dp.I2C1, &clocks
+        ), cs);
+        set_global!(DELAY, delay, cs);
+        set_global!(CLOCK, clocks, cs);
+        set_global!(LED, gpiof.pf10.into_push_pull_output(), cs);
+        set_global!(EXTI, dp.EXTI, cs);
+        set_global!(FLASH, LockedFlash::new(dp.FLASH), cs);
     });
     
     // enable interrupts

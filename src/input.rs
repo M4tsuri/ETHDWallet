@@ -1,10 +1,16 @@
+use stm32f4xx_hal::gpio::ExtiPin;
+
+use crate::{update_global, global::*, error::Error};
+
 pub const FIXED_KEY_LEN: usize = 8;
 
+#[derive(Clone, Copy)]
 pub enum KeyInputState {
     Reading(usize),
     Finished
 }
 
+#[derive(Clone, Copy)]
 pub struct KeyInputBuffer {
     pub buf: [u8; FIXED_KEY_LEN],
     pub state: KeyInputState
@@ -34,7 +40,36 @@ impl KeyInputBuffer {
     }
 
     pub fn wait_for_key() -> [u8; 8] {
-        todo!()
+        update_global!(|mut keyboard: Option<KEY_TRIGGER>, mut exti: Option<EXTI>| {
+            keyboard.enable_interrupt(&mut exti);
+        });
+
+        let mut passcode = [0; 8];
+        
+        loop {
+            cortex_m::asm::wfi();
+            if update_global!(|buf: Copy<KEY_BUFFER>| {
+                if let KeyInputState::Finished = buf.state {
+                    passcode = buf.buf;
+                    true
+                } else {
+                    false
+                }
+            }) {
+                break;
+            }
+        }
+
+        update_global!(|
+            mut keyboard: Option<KEY_TRIGGER>, 
+            mut exti: Option<EXTI>,
+            mut buf: Copy<KEY_BUFFER>
+        | {
+            keyboard.disable_interrupt(&mut exti);
+            buf = KeyInputBuffer::new();
+        });
+
+        passcode
     }
 }
 
@@ -47,6 +82,7 @@ pub enum MsgBufferState {
     Reading(u32),
     Finished,
     Invalid,
+    Error(Error)
 }
 
 pub const MAX_MSG_LEN: usize = 1024;
