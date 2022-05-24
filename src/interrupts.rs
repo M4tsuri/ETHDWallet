@@ -4,7 +4,7 @@ use cortex_m::prelude::*;
 use stm32f4::stm32f407::interrupt;
 use stm32f4xx_hal::block;
 
-use crate::{global::*, update_global, error::Error, i2c::reset_i2c1, input::{KeyInputState, FIXED_KEY_LEN, MsgBufferState}};
+use crate::{global::*, update_global, error::Error, i2c::reset_i2c1, input::{KeyInputState, FIXED_KEY_LEN}};
 
 pub fn set_led() {
     let state = LED_STATE.fetch_xor(
@@ -82,7 +82,7 @@ const SEG7_PLACEHOLDER: u8 = 1  << 1;
 /// |       |
 /// 2       6
 /// |       |
-/// ----1----
+/// |---1---|
 /// |       |
 /// 3       5
 /// |       |

@@ -10,7 +10,7 @@ use stm32f4xx_hal::{
     i2c::{I2c1, self},
     rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
-    gpio::{Edge, gpioa, gpiod, gpiob}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng,
+    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -20,7 +20,7 @@ use crate::{
     set_global,
     wallet::initializer::try_initialize_wallet,
     global::*,
-    error::{Result, Error}
+    error::{Result, Error}, i2c::set_i2c_bus
 };
 
 /// initialize GPIO
@@ -139,7 +139,7 @@ pub fn init() -> Result<()> {
     
     rng_init(dp.RNG.constrain(&clocks));
 
-    serial_init(dp.GPIOA.split(), dp.USART1, &clocks, dp.DMA2)?;
+    serial_init(dp.GPIOA.split(), dp.USART1, &clocks)?;
     keyboard_init(dp.GPIOD.split(), &mut dp.EXTI, &mut syscfg);
 
     let gpiof = dp.GPIOF.split();
