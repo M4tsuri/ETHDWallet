@@ -88,12 +88,18 @@ fn initialize_accounts(cipher: &mut ChaCha20, ctx: &mut Wallet) {
         cipher.apply_keystream(&mut privkey);
 
         let mut keccak = Keccak256::default();
-        keccak.update(key.verifying_key()
-            .to_encoded_point(false)
-            .as_bytes());
-        let (addr, _) = keccak.finalize().split();
+        let points =  &key.verifying_key()
+            .to_encoded_point(false);
+        let pubkey_slice = &points.as_bytes()[1..];
+
+        let mut pubkey: [u8; 64] = [0; 64]; 
+        pubkey.copy_from_slice(pubkey_slice);
+
+        keccak.update(pubkey_slice);
+        let (_, addr): (GenericArray<u8, U12>, _) = keccak.finalize().split();
         
         ctx.zone.keys[i] = privkey;
         ctx.addrs[i] = addr.into();
+        ctx.pubkeys[i] = pubkey;
     }
 }
