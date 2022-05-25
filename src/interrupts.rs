@@ -1,6 +1,6 @@
 use core::sync::atomic;
 
-use cortex_m::prelude::*;
+use cortex_m::{prelude::*, interrupt::free};
 use stm32f4::stm32f407::interrupt;
 
 use crate::{
@@ -124,4 +124,12 @@ fn USART1() {
             };
         }
     });
+}
+
+#[allow(non_snake_case)]
+#[interrupt]
+fn TIM2() {
+    free(|cs| {
+        CIPHER.borrow(cs).set(None);
+    })
 }

@@ -1,6 +1,7 @@
 use core::intrinsics::transmute;
 
 use cortex_m::interrupt::free;
+use fugit::TimerDurationU32;
 use stm32f4::stm32f407::{
     GPIOH, GPIOD, GPIOA, GPIOB,
     self, USART1, I2C1
@@ -10,7 +11,7 @@ use stm32f4xx_hal::{
     i2c::{I2c1, self},
     rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
-    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng,
+    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng, timer::Event,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -138,6 +139,10 @@ pub fn init() -> Result<()> {
     dp.RCC.ahb1enr.modify(|_, w| w.dma1en().enabled());
 
     let clocks = clock_init(dp.RCC.constrain());
+    let mut timer = dp.TIM2.counter(&clocks);
+    timer.start(TimerDurationU32::<1>::secs(60)).unwrap();
+    timer.listen(Event::Update);
+    
     let mut syscfg = dp.SYSCFG.constrain();
     
     rng_init(dp.RNG.constrain(&clocks));
@@ -167,9 +172,11 @@ pub fn init() -> Result<()> {
     // enable interrupts
     pac::NVIC::unpend(pac::interrupt::EXTI15_10);
     pac::NVIC::unpend(pac::interrupt::USART1);
+    pac::NVIC::unpend(pac::interrupt::TIM2);
     unsafe {
         pac::NVIC::unmask(pac::interrupt::EXTI15_10);
         pac::NVIC::unmask(pac::interrupt::USART1);
+        pac::NVIC::unmask(pac::interrupt::TIM2);
     }
 
     try_initialize_wallet()

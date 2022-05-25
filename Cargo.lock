@@ -147,6 +147,7 @@ dependencies = [
  "crc32fast",
  "dotenv",
  "embedded-hal 0.2.7",
+ "fugit",
  "k256",
  "panic-halt",
  "rand",
