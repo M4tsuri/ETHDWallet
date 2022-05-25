@@ -2,9 +2,16 @@ use core::sync::atomic;
 
 use cortex_m::prelude::*;
 use stm32f4::stm32f407::interrupt;
-use stm32f4xx_hal::block;
 
-use crate::{global::*, update_global, error::Error, i2c::reset_i2c1, input::{KeyInputState, FIXED_KEY_LEN}};
+use crate::{
+    global::*, 
+    update_global, 
+    error::Error, 
+    i2c::reset_i2c1, 
+    input::{
+        KeyInputState, FIXED_KEY_LEN, MsgBufferState
+    }
+};
 
 pub fn set_led() {
     let state = LED_STATE.fetch_xor(
@@ -109,10 +116,12 @@ fn to_segled_value(val: u8) -> Option<u8> {
 fn USART1() {
     update_global!(|mut rx: Option<SERIAL_RX>, mut buf: Copy<MSG_BUFFER>| {
         while rx.is_rx_not_empty() {
-            match block!(rx.read()) {
+            match rx.read() {
                 Ok(byte) => buf.read(byte),
-                Err(_error) => {}
-            }
+                Err(_err) => buf.state = MsgBufferState::Error(
+                    Error::SerialTxError
+                ),
+            };
         }
     });
 }

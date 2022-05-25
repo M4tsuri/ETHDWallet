@@ -81,7 +81,6 @@ pub enum MsgBufferState {
     PendingLen(u8),
     Reading(u32),
     Finished,
-    Invalid,
     Error(Error)
 }
 
@@ -117,7 +116,7 @@ impl MsgBuffer {
                     if self.msg_len == 0 { 
                         self.state = MsgBufferState::Finished 
                     } else if self.msg_len >= MAX_MSG_LEN as u32 {
-                        self.state = MsgBufferState::Invalid
+                        self.state = MsgBufferState::Error(Error::SerialDataCorrupted)
                     } else {
                         self.state = MsgBufferState::Reading(0)
                     }
