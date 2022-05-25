@@ -54,7 +54,10 @@ fn serial_init(gpioa: gpioa::Parts, usart1: USART1, clk: &Clocks) -> Result<()> 
             .pa10
             .into_alternate()
     );
-    let config = serial::Config::default().baudrate(14330.bps());
+    let config = serial::Config::default()
+        .baudrate(9600.bps())
+        .wordlength_8()
+        .stopbits(serial::config::StopBits::STOP1);
     let serial = Serial::new(
         usart1, pins, config, clk
     )?.with_u8_data();
