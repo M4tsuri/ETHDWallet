@@ -1,13 +1,15 @@
+use cortex_m::interrupt::free;
 use cortex_m::prelude::*;
 use stm32f4::stm32f407::USART1;
 use stm32f4xx_hal::{serial::Tx, block};
 use crate::error::Result;
 
+use crate::wallet::{wallet, PubKey};
 use crate::{
     global::*, 
     update_global, 
     wallet::{
-        Wallet, WALLET,
+        Wallet,
         safe_zone::{Signature, EthAddr},
         ACCOUNT_NUM
     }, 
@@ -21,22 +23,25 @@ use crate::{
 pub fn main_loop() -> ! {
     loop {
         cortex_m::asm::wfi();
+        let buf = update_global!(|buf: Copy<MSG_BUFFER>| {
+            buf
+        });
+
+        let result = match buf.state {
+            MsgBufferState::Finished => {
+                dispatch(buf, wallet())
+            },
+            MsgBufferState::Error(e) => {
+                Err(e)
+            }
+            _ => continue
+        };
+
         let _result: Result<()> = update_global!(|
             mut buf: Copy<MSG_BUFFER>, 
             mut tx: Option<SERIAL_TX>
         | {
-            match match buf.state {
-                MsgBufferState::Finished => {
-                    dispatch(buf, &WALLET)
-                },
-                MsgBufferState::Invalid => {
-                    Err(Error::SerialDataCorrupted)
-                },
-                MsgBufferState::Error(e) => {
-                    Err(e)
-                }
-                _ => return Ok(())
-            } {
+            match result  {
                 Ok(resp) => {
                     block!(tx.write(0x00))?;
                     resp.write_tx(&mut tx)?;
@@ -69,7 +74,7 @@ enum Instruction<'raw> {
 #[repr(u8)]
 enum Response {
     Signature(Signature),
-    Address(EthAddr),
+    Address((EthAddr, PubKey)),
     AddressList([EthAddr; ACCOUNT_NUM])
 }
 
@@ -84,9 +89,10 @@ impl Response {
                 tx.bwrite_all(s)?;
                 block!(tx.write(*v))?;
             },
-            Response::Address(addr) => {
+            Response::Address((addr, pubkey)) => {
                 block!(tx.write(0x01))?;
                 tx.bwrite_all(addr)?;
+                tx.bwrite_all(pubkey)?;
             },
             Response::AddressList(list) => {
                 block!(tx.write(0x02))?;
@@ -115,7 +121,7 @@ impl<'raw> TryFrom<&'raw [u8]> for Instruction<'raw> {
 }
 
 fn dispatch(buf: MsgBuffer, wallet: &Wallet) -> error::Result<Response> {
-    if !WALLET.initialized {
+    if !wallet.initialized {
         return Err(Error::WalletNotInitialized)
     }
     
@@ -123,17 +129,27 @@ fn dispatch(buf: MsgBuffer, wallet: &Wallet) -> error::Result<Response> {
 
     Ok(match instr {
         Instruction::SignTransaction(idx, raw) => {
-            wallet.fill_cipher(KeyInputBuffer::wait_for_key())?;
-            
+            if free(|cs| {
+                let cipher = CIPHER.borrow(cs).take();
+                let is_none = cipher.is_none();
+                CIPHER.borrow(cs).set(cipher);
+                is_none
+            }) {
+                wallet.fill_cipher(KeyInputBuffer::wait_for_key())?;
+            }
+           
             Response::Signature(
                 wallet.sign_raw(idx as usize, raw)?
             )
         },
         Instruction::GetAddress(idx) => {
-            Response::Address(
-                *wallet.addrs.get(idx as usize)
-                    .ok_or(Error::AccountIdxOOB)?
-            )
+            if idx as usize >= ACCOUNT_NUM {
+                return Err(Error::AccountIdxOOB)
+            }
+            Response::Address((
+                wallet.addrs[idx as usize],
+                wallet.pubkeys[idx as usize]
+            ))
         },
         Instruction::GetAddressList => {
             Response::AddressList(wallet.addrs)

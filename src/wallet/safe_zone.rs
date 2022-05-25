@@ -56,6 +56,11 @@ impl SafeZone {
         // sign digest
         let sig: RSignature = sign_key.try_sign(raw)?;
 
+        let pubkey = sig.recover_verifying_key(raw)?;
+        if pubkey != sign_key.verifying_key() {
+            return Err(Error::CryptoError)
+        }
+
         Ok(Signature { 
             r: sig.r().to_bytes().into(), 
             s: sig.s().to_bytes().into(), 
