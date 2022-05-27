@@ -1,0 +1,51 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug executable 'ethdwallet-cli'",
+            "cargo": {
+                "args": [
+                    "build",
+                    "--bin=ethdwallet-cli",
+                    "--package=ethdwallet-cli"
+                ],
+                "filter": {
+                    "name": "ethdwallet-cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [
+                "-s", "/dev/tty.usbserial-1410", 
+                "-b", "9600",
+                "transfer",
+                "-t", "8F28dA6FF26E782cB0495E581fADbCEC320A4769",
+                "-v", "10000000000000000",
+                "-a", "1"],
+            "cwd": "${workspaceFolder}"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "name": "Debug unit tests in executable 'ethdwallet-cli'",
+            "cargo": {
+                "args": [
+                    "test",
+                    "--no-run",
+                    "--bin=ethdwallet-cli",
+                    "--package=ethdwallet-cli"
+                ],
+                "filter": {
+                    "name": "ethdwallet-cli",
+                    "kind": "bin"
+                }
+            },
+            "args": [],
+            "cwd": "${workspaceFolder}"
+        }
+    ]
+}
