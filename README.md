@@ -1,6 +1,6 @@
 # ETHDWallet
 
-An proof-of-concept design of Ethereum hardware wallet.
+A proof-of-concept design of Ethereum hardware wallet.
 
 **THIS IS MY COURSEWORK, DO NOT USE IT IN PRODUCTION**
 
