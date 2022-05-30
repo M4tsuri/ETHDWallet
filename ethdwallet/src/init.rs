@@ -4,14 +4,14 @@ use cortex_m::interrupt::free;
 use fugit::TimerDurationU32;
 use stm32f4::stm32f407::{
     GPIOH, GPIOD, GPIOA, GPIOB,
-    self, USART1, I2C1, IWDG
+    self, USART1, I2C1, IWDG, TIM2
 };
 use stm32f4xx_hal::{
     pac,
     i2c::{I2c1, self},
     rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
-    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng, watchdog::IndependentWatchdog,
+    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng, watchdog::IndependentWatchdog, timer::Event,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -119,13 +119,17 @@ pub fn i2c1_init(pins: I2cPins, i2c1: I2C1, clk: &Clocks) -> I2cType {
     )
 }
 
-fn watchdog_init(dog: IWDG) {
+fn watchdog_init(dog: IWDG, tim: TIM2, clks: &Clocks) {
     let mut iwatchdog = IndependentWatchdog::new(dog);
     iwatchdog.start(TimerDurationU32::minutes(5));
 
     free(|cs| {
         set_global!(IWDG, iwatchdog, cs)
     });
+
+    let mut timer = tim.counter_us(clks);
+    timer.start(TimerDurationU32::secs(60)).unwrap();
+    timer.listen(Event::Update);
 }
 
 pub fn init() -> Result<()> {

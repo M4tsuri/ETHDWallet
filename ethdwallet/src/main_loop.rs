@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use cortex_m::interrupt::free;
 use cortex_m::prelude::*;
 use fugit::TimerDurationU32;
@@ -23,8 +25,8 @@ use crate::{
 
 pub fn main_loop() -> ! {
     loop {
-        
         cortex_m::asm::wfi();
+        DOG_MODE.store(false, Ordering::SeqCst);
         
         let buf = update_global!(|buf: Copy<MSG_BUFFER>| {
             buf
@@ -50,6 +52,7 @@ pub fn main_loop() -> ! {
                     update_global!(|mut dog: Option<IWDG>| {
                         dog.feed()
                     });
+                    WATCHDOG.store(true, Ordering::SeqCst);
                     block!(tx.write(0x00))?;
                     resp.write_tx(&mut tx)?;
                 },

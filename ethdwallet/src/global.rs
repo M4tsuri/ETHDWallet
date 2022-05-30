@@ -113,3 +113,8 @@ global!(@option IWDG: IndependentWatchdog);
 /// true for rapid and slow for idle
 pub static DOG_MODE: AtomicBool = AtomicBool::new(true);
 pub static WATCHDOG: AtomicBool = AtomicBool::new(true);
+global!(@option DOG_TIMER: )
+
+pub fn watchdog_set_rapid() {
+
+}
