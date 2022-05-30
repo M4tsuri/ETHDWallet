@@ -1,7 +1,7 @@
+#![no_std]
 #![feature(let_else)]
 #![allow(clippy::empty_loop)]
 #![no_main]
-#![cfg_attr(not(test), no_std)]
 #![feature(alloc_error_handler)]
 #![feature(core_intrinsics)]
 

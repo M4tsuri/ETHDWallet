@@ -1504,6 +1504,7 @@ dependencies = [
 [[package]]
 name = "serlp"
 version = "0.3.0"
+source = "git+https://github.com/M4tsuri/serlp.git#1b33ecdd5a70965d3479a431e811546c9cf0928d"
 dependencies = [
  "byteorder",
  "num-bigint",

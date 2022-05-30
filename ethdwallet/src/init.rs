@@ -139,8 +139,8 @@ pub fn init() -> Result<()> {
     dp.RCC.ahb1enr.modify(|_, w| w.dma1en().enabled());
 
     let clocks = clock_init(dp.RCC.constrain());
-    let mut timer = dp.TIM2.counter(&clocks);
-    timer.start(TimerDurationU32::<1>::secs(60)).unwrap();
+    let mut timer = dp.TIM2.counter_us(&clocks);
+    timer.start(TimerDurationU32::secs(60)).unwrap();
     timer.listen(Event::Update);
     
     let mut syscfg = dp.SYSCFG.constrain();
