@@ -81,6 +81,7 @@ macro_rules! update_global {
 
 global!(@option LED: Pin<'F', 10, Output>);
 pub static LED_STATE: AtomicBool = AtomicBool::new(true);
+pub static WATCHDOG: AtomicBool = AtomicBool::new(true);
 
 global!(@option EXTI: stm32f407::EXTI);
 global!(@option RNG: ChaCha20Rng);

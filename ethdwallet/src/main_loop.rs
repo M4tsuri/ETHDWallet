@@ -1,3 +1,5 @@
+use core::sync::atomic::Ordering;
+
 use cortex_m::interrupt::free;
 use cortex_m::prelude::*;
 use stm32f4::stm32f407::USART1;
@@ -43,6 +45,8 @@ pub fn main_loop() -> ! {
         | {
             match result  {
                 Ok(resp) => {
+                    // feed dog
+                    WATCHDOG.store(true, Ordering::Relaxed);
                     block!(tx.write(0x00))?;
                     resp.write_tx(&mut tx)?;
                 },
