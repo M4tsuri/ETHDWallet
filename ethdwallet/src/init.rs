@@ -123,13 +123,14 @@ fn watchdog_init(dog: IWDG, tim: TIM2, clks: &Clocks) {
     let mut iwatchdog = IndependentWatchdog::new(dog);
     iwatchdog.start(TimerDurationU32::minutes(5));
 
-    free(|cs| {
-        set_global!(IWDG, iwatchdog, cs)
-    });
-
     let mut timer = tim.counter_us(clks);
-    timer.start(TimerDurationU32::secs(60)).unwrap();
+    timer.start(TimerDurationU32::minutes(1));
     timer.listen(Event::Update);
+
+    free(|cs| {
+        set_global!(IWDG, iwatchdog, cs);
+        set_global!(DOG_TIMER, timer, cs);
+    });
 }
 
 pub fn init() -> Result<()> {
@@ -142,7 +143,6 @@ pub fn init() -> Result<()> {
 
     heap_init();
     gpio_init(&dp);
-    watchdog_init(dp.IWDG);
 
     // see https://github.com/probe-rs/probe-rs/issues/350
     dp.DBGMCU.cr.modify(|_, w| {
@@ -153,6 +153,7 @@ pub fn init() -> Result<()> {
     dp.RCC.ahb1enr.modify(|_, w| w.dma1en().enabled());
 
     let clocks = clock_init(dp.RCC.constrain());
+    watchdog_init(dp.IWDG, dp.TIM2, &clocks);
     
     let mut syscfg = dp.SYSCFG.constrain();
     
@@ -183,9 +184,11 @@ pub fn init() -> Result<()> {
     // enable interrupts
     pac::NVIC::unpend(pac::interrupt::EXTI15_10);
     pac::NVIC::unpend(pac::interrupt::USART1);
+    pac::NVIC::unpend(pac::interrupt::TIM2);
     unsafe {
         pac::NVIC::unmask(pac::interrupt::EXTI15_10);
         pac::NVIC::unmask(pac::interrupt::USART1);
+        pac::NVIC::unmask(pac::interrupt::TIM2);
     }
 
     try_initialize_wallet()

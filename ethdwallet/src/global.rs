@@ -1,13 +1,14 @@
-use core::{cell::Cell, sync::atomic::AtomicBool};
+use core::{cell::Cell, sync::atomic::{AtomicBool, Ordering}};
 
 use chacha20::ChaCha20;
-use cortex_m::interrupt::Mutex;
+use cortex_m::{interrupt::Mutex, peripheral::SCB};
+use fugit::TimerDurationU32;
 use rand_chacha::ChaCha20Rng;
-use stm32f4::stm32f407::{self, USART1, TIM1};
+use stm32f4::stm32f407::{self, USART1, TIM1, TIM2};
 use stm32f4xx_hal::{
     gpio::{Output, Input, Pin}, 
     serial::{Tx, Rx}, i2c::I2c1,
-    rcc::Clocks, timer::Delay, flash::LockedFlash, watchdog::IndependentWatchdog
+    rcc::Clocks, timer::{Delay, Counter}, flash::LockedFlash, watchdog::IndependentWatchdog
 };
 
 use crate::input::{MsgBuffer, KeyInputBuffer};
@@ -110,11 +111,34 @@ global!(@option CLOCK: Clocks);
 pub type TIM1Delay = Delay<TIM1, 15000>;
 global!(@option DELAY: TIM1Delay);
 global!(@option IWDG: IndependentWatchdog);
-/// true for rapid and slow for idle
-pub static DOG_MODE: AtomicBool = AtomicBool::new(true);
+
 pub static WATCHDOG: AtomicBool = AtomicBool::new(true);
-global!(@option DOG_TIMER: )
+/// true for rapid and false for slow
+pub static DOG_MODE: AtomicBool = AtomicBool::new(false);
+global!(@option DOG_TIMER: Counter<TIM2, 1000000>);
 
 pub fn watchdog_set_rapid() {
+    let result = update_global!(|mut dog: Option<DOG_TIMER>| {
+        dog.cancel()?;
+        dog.start(TimerDurationU32::millis(100))
+    });
 
+    if let Err(_) = result {
+        SCB::sys_reset()
+    }
+
+    DOG_MODE.store(true, Ordering::SeqCst);
+}
+
+pub fn watchdog_set_slow() {
+    let result = update_global!(|mut dog: Option<DOG_TIMER>| {
+        dog.cancel()?;
+        dog.start(TimerDurationU32::minutes(1))
+    });
+
+    if let Err(_) = result {
+        SCB::sys_reset()
+    }
+
+    DOG_MODE.store(false, Ordering::SeqCst);
 }

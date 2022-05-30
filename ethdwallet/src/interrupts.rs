@@ -130,20 +130,19 @@ fn USART1() {
 #[interrupt]
 fn TIM2() {
     // check watchdog
-    match WATCHDOG.compare_exchange(
+    if match WATCHDOG.compare_exchange(
         true, false, 
         atomic::Ordering::Acquire, 
         atomic::Ordering::Relaxed) 
     {
-        Ok(true) | Err(_) => {
-            if DOG_MODE.load(Ordering::SeqCst) {
-                SCB::sys_reset()
-            } else {
-                free(|cs| {
-                    CIPHER.borrow(cs).set(None)
-                })
-            }
+        Ok(true) => false,
+        _ => true,
+    } {
+        // rapid
+        if DOG_MODE.load(Ordering::SeqCst) {
+            SCB::sys_reset()
+        } else {
+            watchdog_set_rapid()
         }
-        _ => {},
     }
 }

@@ -26,7 +26,7 @@ use crate::{
 pub fn main_loop() -> ! {
     loop {
         cortex_m::asm::wfi();
-        DOG_MODE.store(false, Ordering::SeqCst);
+        watchdog_set_slow();
         
         let buf = update_global!(|buf: Copy<MSG_BUFFER>| {
             buf
