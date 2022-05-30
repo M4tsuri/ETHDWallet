@@ -7,7 +7,7 @@ use stm32f4::stm32f407::{self, USART1, TIM1};
 use stm32f4xx_hal::{
     gpio::{Output, Input, Pin}, 
     serial::{Tx, Rx}, i2c::I2c1,
-    rcc::Clocks, timer::Delay, flash::LockedFlash
+    rcc::Clocks, timer::Delay, flash::LockedFlash, watchdog::IndependentWatchdog
 };
 
 use crate::input::{MsgBuffer, KeyInputBuffer};
@@ -81,7 +81,6 @@ macro_rules! update_global {
 
 global!(@option LED: Pin<'F', 10, Output>);
 pub static LED_STATE: AtomicBool = AtomicBool::new(true);
-pub static WATCHDOG: AtomicBool = AtomicBool::new(true);
 
 global!(@option EXTI: stm32f407::EXTI);
 global!(@option RNG: ChaCha20Rng);
@@ -110,3 +109,7 @@ global!(@option CLOCK: Clocks);
 
 pub type TIM1Delay = Delay<TIM1, 15000>;
 global!(@option DELAY: TIM1Delay);
+global!(@option IWDG: IndependentWatchdog);
+/// true for rapid and slow for idle
+pub static DOG_MODE: AtomicBool = AtomicBool::new(true);
+pub static WATCHDOG: AtomicBool = AtomicBool::new(true);

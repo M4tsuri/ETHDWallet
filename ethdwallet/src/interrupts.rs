@@ -1,6 +1,6 @@
-use core::sync::atomic;
+use core::sync::atomic::{self, Ordering};
 
-use cortex_m::{prelude::*, peripheral::SCB};
+use cortex_m::{prelude::*, peripheral::SCB, interrupt::free};
 use stm32f4::stm32f407::interrupt;
 
 use crate::{
@@ -135,7 +135,15 @@ fn TIM2() {
         atomic::Ordering::Acquire, 
         atomic::Ordering::Relaxed) 
     {
-        Ok(true) | Err(_) => SCB::sys_reset(),
+        Ok(true) | Err(_) => {
+            if DOG_MODE.load(Ordering::SeqCst) {
+                SCB::sys_reset()
+            } else {
+                free(|cs| {
+                    CIPHER.borrow(cs).set(None)
+                })
+            }
+        }
         _ => {},
     }
 }

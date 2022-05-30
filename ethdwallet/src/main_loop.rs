@@ -1,7 +1,6 @@
-use core::sync::atomic::Ordering;
-
 use cortex_m::interrupt::free;
 use cortex_m::prelude::*;
+use fugit::TimerDurationU32;
 use stm32f4::stm32f407::USART1;
 use stm32f4xx_hal::{serial::Tx, block};
 use crate::error::Result;
@@ -24,7 +23,9 @@ use crate::{
 
 pub fn main_loop() -> ! {
     loop {
+        
         cortex_m::asm::wfi();
+        
         let buf = update_global!(|buf: Copy<MSG_BUFFER>| {
             buf
         });
@@ -46,7 +47,9 @@ pub fn main_loop() -> ! {
             match result  {
                 Ok(resp) => {
                     // feed dog
-                    WATCHDOG.store(true, Ordering::Relaxed);
+                    update_global!(|mut dog: Option<IWDG>| {
+                        dog.feed()
+                    });
                     block!(tx.write(0x00))?;
                     resp.write_tx(&mut tx)?;
                 },

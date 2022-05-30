@@ -4,14 +4,14 @@ use cortex_m::interrupt::free;
 use fugit::TimerDurationU32;
 use stm32f4::stm32f407::{
     GPIOH, GPIOD, GPIOA, GPIOB,
-    self, USART1, I2C1
+    self, USART1, I2C1, IWDG
 };
 use stm32f4xx_hal::{
     pac,
     i2c::{I2c1, self},
     rcc::{RccExt, Enable, Clocks, Rcc},
     prelude::*, 
-    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng, timer::Event,
+    gpio::{Edge, gpioa, gpiod}, flash::LockedFlash, serial::{Serial, self}, syscfg::SysCfg, rng::Rng, watchdog::IndependentWatchdog,
 };
 use rand::{RngCore, SeedableRng};
 use rand_chacha::ChaCha20Rng;
@@ -119,6 +119,15 @@ pub fn i2c1_init(pins: I2cPins, i2c1: I2C1, clk: &Clocks) -> I2cType {
     )
 }
 
+fn watchdog_init(dog: IWDG) {
+    let mut iwatchdog = IndependentWatchdog::new(dog);
+    iwatchdog.start(TimerDurationU32::minutes(5));
+
+    free(|cs| {
+        set_global!(IWDG, iwatchdog, cs)
+    });
+}
+
 pub fn init() -> Result<()> {
     let (Some(mut dp), Some(_cp)) = (
         stm32f407::Peripherals::take(),
@@ -129,6 +138,7 @@ pub fn init() -> Result<()> {
 
     heap_init();
     gpio_init(&dp);
+    watchdog_init(dp.IWDG);
 
     // see https://github.com/probe-rs/probe-rs/issues/350
     dp.DBGMCU.cr.modify(|_, w| {
@@ -139,9 +149,6 @@ pub fn init() -> Result<()> {
     dp.RCC.ahb1enr.modify(|_, w| w.dma1en().enabled());
 
     let clocks = clock_init(dp.RCC.constrain());
-    let mut timer = dp.TIM2.counter_us(&clocks);
-    timer.start(TimerDurationU32::secs(60)).unwrap();
-    timer.listen(Event::Update);
     
     let mut syscfg = dp.SYSCFG.constrain();
     
@@ -172,11 +179,9 @@ pub fn init() -> Result<()> {
     // enable interrupts
     pac::NVIC::unpend(pac::interrupt::EXTI15_10);
     pac::NVIC::unpend(pac::interrupt::USART1);
-    pac::NVIC::unpend(pac::interrupt::TIM2);
     unsafe {
         pac::NVIC::unmask(pac::interrupt::EXTI15_10);
         pac::NVIC::unmask(pac::interrupt::USART1);
-        pac::NVIC::unmask(pac::interrupt::TIM2);
     }
 
     try_initialize_wallet()
