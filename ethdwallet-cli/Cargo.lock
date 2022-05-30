@@ -303,7 +303,6 @@ dependencies = [
  "hex",
  "num",
  "num_enum",
- "rlp",
  "serde",
  "serde_bytes",
  "serialport",

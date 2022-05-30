@@ -1,6 +1,5 @@
 use num::bigint::ParseBigIntError;
 use num_enum::FromPrimitive;
-use web3::ethabi::ethereum_types::FromDecStrErr;
 
 #[derive(Debug)]
 pub enum Error {

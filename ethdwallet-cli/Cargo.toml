@@ -12,7 +12,6 @@ hex = "0.4.3"
 num_enum = "0.5.7"
 web3 = "0.18.0"
 tokio = { version = "1", features = ["full"] }
-rlp = "0.5.1"
 serlp = { git = "https://github.com/M4tsuri/serlp.git" }
 serde = { version = "1.0", features = ['derive'] }
 serde_bytes = "0.11"

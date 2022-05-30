@@ -6,9 +6,8 @@ use clap::{Parser, Subcommand};
 use error::Error;
 use num::BigUint;
 use serialport::{self, SerialPort};
-use tx::{UnsignedTx, SignedTx};
-use web3::types::{H160, U256};
-use rlp;
+use tx::UnsignedTx;
+use web3::types::H160;
 
 mod error;
 mod tx;
